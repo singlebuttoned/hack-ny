@@ -1,2 +1,15 @@
 *.log
 *.env
+__pycache__/visualization.cpython-312.pyc
+__pycache__/logger_config.cpython-312.pyc
+__pycache__/game_state.cpython-312.pyc
+__pycache__/decision_maker.cpython-312.pyc
+__pycache__/api_client.cpython-312.pyc
+.idea/workspace.xml
+.idea/vcs.xml
+.idea/modules.xml
+.idea/misc.xml
+.idea/inspectionProfiles/Project_Default.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/hack-ny.iml
+.idea/discord.xml
