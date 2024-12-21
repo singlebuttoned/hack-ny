@@ -25,7 +25,7 @@ class APIClient:
             response.raise_for_status()
             data = response.json()
             game_state = self.parse_game_state(data)
-            logging.debug(f"Получено состояние игры: {game_state}")
+            # logging.debug(f"Получено состояние игры: {game_state}")
             return game_state
         except requests.exceptions.RequestException as e:
             logging.error(f"Ошибка при получении состояния игры: {e}")
