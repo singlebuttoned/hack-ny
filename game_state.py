@@ -1,5 +1,6 @@
 # game_state.py
 from dataclasses import dataclass
+from enum import Enum
 from typing import List
 
 
@@ -47,3 +48,8 @@ class GameState:
     tick_remain_ms: int
     revive_timeout_sec: int
     errors: List[str]
+
+
+class Strategy(Enum):
+    BASIC = 1
+    ADVANCED = 2

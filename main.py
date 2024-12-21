@@ -2,7 +2,7 @@
 import time
 import logging
 from api_client import APIClient
-from game_state import GameState, Snake
+from game_state import GameState, Snake, Strategy
 from decision_maker import DecisionMaker
 from visualization import Visualization
 from logger_config import setup_logger
@@ -64,7 +64,7 @@ def main():
     SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
-    decision_maker = DecisionMaker()
+    decision_maker = DecisionMaker(strategy=Strategy.ADVANCED)
     visualization = Visualization()
 
     # Запускаем приложение визуализации в главном потоке
