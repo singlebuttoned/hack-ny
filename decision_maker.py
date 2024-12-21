@@ -3,13 +3,8 @@ import logging
 import heapq
 import random
 from typing import List, Optional, Tuple, Dict
-from dataclasses import dataclass
 from game_state import GameState, Snake, Food, Point3D, Strategy
-
-
-@dataclass
-class Visualization:
-    target: Optional[Food] = None
+from visualization import Visualization
 
 
 class DecisionMaker:
@@ -210,6 +205,7 @@ class DecisionMaker:
             )
             if path:
                 # Двигаемся по пути к текущей цели
+                visualization.route = path
                 return self.get_direction_from_path(head, path)
             else:
                 logging.info(

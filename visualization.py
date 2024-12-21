@@ -11,13 +11,13 @@ from PyQt5.QtCore import QObject, pyqtSignal
 class Visualization(QObject):
     update_signal = pyqtSignal(object, object)
 
-
     def __init__(self):
         super().__init__()
         self.game_state = None
         self.my_snake = None
         self.lock = Lock()
         self.target = None
+        self.route = None
 
         # Создаём сигнал для обновления данных
         self.update_signal.connect(self.update_visualization)
@@ -40,16 +40,16 @@ class Visualization(QObject):
         self.food = gl.GLScatterPlotItem()
         self.enemies = gl.GLScatterPlotItem()
         self.snake = gl.GLScatterPlotItem()
-
-        # **Инициализируем объект для отображения цели**
         self.target_marker = gl.GLScatterPlotItem()
+        self.route_marker = gl.GLScatterPlotItem()  # Add route marker
 
         # Добавляем объекты на сцену
         self.window.addItem(self.fences)
         self.window.addItem(self.food)
         self.window.addItem(self.enemies)
         self.window.addItem(self.snake)
-        self.window.addItem(self.target_marker)  # Добавляем после инициализации
+        self.window.addItem(self.target_marker)
+        self.window.addItem(self.route_marker)  # Add to the scene
 
     def start(self):
         # Запускаем приложение Qt
@@ -63,7 +63,6 @@ class Visualization(QObject):
         with self.lock:
             self.game_state = game_state
             self.my_snake = my_snake
-            # self
 
             # Обновляем заборы
             fences = game_state.fences
@@ -121,11 +120,30 @@ class Visualization(QObject):
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
                 )
 
+            # Обновляем цель
             target = self.target
             if target:
-                target_position = np.array([[target.c.x, target.c.y, target.c.z]], dtype=np.float32)
-                self.target_marker.setData(pos=target_position, color=(0, 0, 1, 1), size=22)
+                target_position = np.array(
+                    [[target.c.x, target.c.y, target.c.z]], dtype=np.float32
+                )
+                self.target_marker.setData(
+                    pos=target_position, color=(0, 0, 1, 1), size=22
+                )
             else:
                 self.target_marker.setData(
+                    pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
+                )
+
+            # Update route
+            route = self.route
+            if route:
+                route_positions = np.array(
+                    [[pt[0], pt[1], pt[2]] for pt in route], dtype=np.float32
+                )
+                self.route_marker.setData(
+                    pos=route_positions, color=(1, 1, 1, 1), size=5
+                )
+            else:
+                self.route_marker.setData(
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
                 )
