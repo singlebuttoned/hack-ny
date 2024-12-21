@@ -12,7 +12,6 @@ import threading
 def main():
     # Настройка логирования
     setup_logger()
-    logging.info("Запуск бота для 3D Snake")
 
     # Конфигурация
     TOKEN = "f05b5728-8e94-4f55-a903-e2ca923d285d"  # Замените на ваш токен
