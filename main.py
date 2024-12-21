@@ -2,7 +2,7 @@
 import time
 import logging
 from api_client import APIClient
-from game_state import GameState, Snake, Strategy
+from game_state import GameState, Snake
 from decision_maker import DecisionMaker
 from visualization import Visualization
 from logger_config import setup_logger
@@ -34,14 +34,12 @@ def bot_logic(api_client, decision_maker, visualization, snake_id):
         # Проверка статуса вашей змеи
         my_snake = next((s for s in game_state.snakes if s.id == my_snake.id), my_snake)
         if my_snake.status == "dead":
-            logging.warning(
-                f"Змея мертва, ожидаем возрождения {game_state.revive_timeout_sec} секунд"
-            )
+            logging.warning("Змея мертва, ожидаем возрождения.")
             time.sleep(game_state.revive_timeout_sec)
             continue
 
         # Принятие решения о движении
-        direction = decision_maker.decide_move(game_state, my_snake)
+        direction = decision_maker.decide_move(game_state, my_snake, visualization)
         logging.info(f"Принято направление: {direction}")
 
         # Отправка команды о движении
@@ -66,7 +64,7 @@ def main():
     SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
-    decision_maker = DecisionMaker(strategy=Strategy.ADVANCED)
+    decision_maker = DecisionMaker()
     visualization = Visualization()
 
     # Запускаем приложение визуализации в главном потоке

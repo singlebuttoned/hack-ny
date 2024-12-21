@@ -18,7 +18,7 @@ class DecisionMaker:
         logging.info(f"Стратегия принятия решений: {self.strategy.name}")
         logging.info(f"Максимальная глубина поиска: {self.max_search_depth}")
 
-    def decide_move(self, game_state: GameState, my_snake: Snake) -> List[int]:
+    def decide_move(self, game_state: GameState, my_snake: Snake, visualization) -> List[int]:
         # Выбор стратегии
         if self.strategy == Strategy.BASIC:
             return self.basic_strategy(game_state, my_snake)
@@ -35,6 +35,7 @@ class DecisionMaker:
 
         # Найдем ближайший мандарин по Манхэттену
         target = self.find_closest_food(head, game_state.food)
+        visualization.target = self.target  # Передаём цель в визуализацию
         if not target:
             logging.info(
                 "Мандарины не найдены, продолжаем двигаться текущим направлением"
@@ -128,7 +129,7 @@ class DecisionMaker:
             next_step[0] - head.x,
             next_step[1] - head.y,
             next_step[2] - head.z,
-        ]
+            ]
 
         # Нормализуем направление
         direction = [int(d / max(abs(d), 1)) for d in direction]
@@ -146,7 +147,7 @@ class DecisionMaker:
         closest_food = None
         for food in food_list:
             distance = (
-                abs(food.c.x - head.x) + abs(food.c.y - head.y) + abs(food.c.z - head.z)
+                    abs(food.c.x - head.x) + abs(food.c.y - head.y) + abs(food.c.z - head.z)
             )
             logging.debug(
                 f"Мандарин на ({food.c.x}, {food.c.y}, {food.c.z}) Расстояние: {distance}"
@@ -253,9 +254,9 @@ class DecisionMaker:
         for dx, dy, dz in directions:
             nx, ny, nz = x + dx, y + dy, z + dz
             if (
-                0 <= nx < map_size[0]
-                and 0 <= ny < map_size[1]
-                and 0 <= nz < map_size[2]
+                    0 <= nx < map_size[0]
+                    and 0 <= ny < map_size[1]
+                    and 0 <= nz < map_size[2]
             ):
                 neighbors.append((nx, ny, nz))
         return neighbors
@@ -281,10 +282,10 @@ class DecisionMaker:
             new_y = head.y + direction[1]
             new_z = head.z + direction[2]
             if (
-                0 <= new_x < map_size[0]
-                and 0 <= new_y < map_size[1]
-                and 0 <= new_z < map_size[2]
-                and (new_x, new_y, new_z) not in obstacles
+                    0 <= new_x < map_size[0]
+                    and 0 <= new_y < map_size[1]
+                    and 0 <= new_z < map_size[2]
+                    and (new_x, new_y, new_z) not in obstacles
             ):
                 logging.info(f"Безопасное направление найдено: {direction}")
                 return direction
