@@ -21,6 +21,7 @@ class Snake:
     revive_remain_ms: int
 
 
+
 @dataclass
 class Enemy:
     geometry: List[Point3D]

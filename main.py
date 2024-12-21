@@ -18,7 +18,7 @@ def bot_logic(api_client, decision_maker, visualization, snake_id):
         logging.error("Не удалось получить информацию о вашей змее.")
         return
 
-    my_snake = initial_game_state.snakes[0]  # Если несколько, необходимо выбрать нужную
+    my_snake = initial_game_state.snakes[2]  # Если несколько, необходимо выбрать нужную
     logging.info(f"Управляется змеёй с ID: {my_snake.id}")
 
     # Отправляем начальное визуализационное обновление
@@ -39,7 +39,7 @@ def bot_logic(api_client, decision_maker, visualization, snake_id):
             continue
 
         # Принятие решения о движении
-        direction = decision_maker.decide_move(game_state, my_snake)
+        direction = decision_maker.decide_move(game_state, my_snake, visualization)
         logging.info(f"Принято направление: {direction}")
 
         # Отправка команды о движении
@@ -65,6 +65,7 @@ def main():
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
     decision_maker = DecisionMaker()
+
     visualization = Visualization()
 
     # Запускаем приложение визуализации в главном потоке

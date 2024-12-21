@@ -6,16 +6,17 @@ from game_state import GameState, Snake, Food, Point3D
 
 class DecisionMaker:
     def __init__(self):
-        pass
+        self.target = None
 
-    def decide_move(self, game_state: GameState, my_snake: Snake) -> List[int]:
+    def decide_move(self, game_state: GameState, my_snake: Snake, visualization) -> List[int]:
         logging.info("Начало процесса принятия решения")
         head = my_snake.geometry[0]
         logging.info(f"Позиция головы змеи: ({head.x}, {head.y}, {head.z})")
-
+        self.target = self.find_closest_food(head, game_state.food)
+        visualization.target = self.target  # Передаём цель в визуализацию
         # Найдем ближайший мандарин по Манхэттену
-        target = self.find_closest_food(head, game_state.food)
-        if not target:
+        self.target = self.find_closest_food(head, game_state.food)
+        if not self.target:
             logging.info(
                 "Мандарины не найдены, продолжаем двигаться текущим направлением"
             )
@@ -24,9 +25,9 @@ class DecisionMaker:
             )  # Если мандаринов нет, продолжаем движение текущим направлением
 
         logging.info(
-            f"Цель: мандарин на позиции ({target.c.x}, {target.c.y}, {target.c.z})"
+            f"Цель: мандарин на позиции ({self.target.c.x}, {self.target.c.y}, {self.target.c.z})"
         )
-        direction = self.get_direction_vector(head, target.c)
+        direction = self.get_direction_vector(head, self.target.c)
         return direction
 
     def find_closest_food(self, head: Point3D, food_list: List[Food]) -> Optional[Food]:
