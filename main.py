@@ -40,7 +40,7 @@ def bot_logic(api_client, decision_maker, visualization, snake_id):
 
         # Принятие решения о движении
         direction = decision_maker.decide_move(game_state, my_snake)
-        logging.debug(f"Принято направление: {direction}")
+        logging.info(f"Принято направление: {direction}")
 
         # Отправка команды о движении
         api_client.send_move(my_snake.id, direction)

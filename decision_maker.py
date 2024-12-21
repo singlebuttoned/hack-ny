@@ -9,25 +9,24 @@ class DecisionMaker:
         pass
 
     def decide_move(self, game_state: GameState, my_snake: Snake) -> List[int]:
-        logging.debug("Начало процесса принятия решения")
+        logging.info("Начало процесса принятия решения")
         head = my_snake.geometry[0]
-        logging.debug(f"Позиция головы змеи: ({head.x}, {head.y}, {head.z})")
+        logging.info(f"Позиция головы змеи: ({head.x}, {head.y}, {head.z})")
 
         # Найдем ближайший мандарин по Манхэттену
         target = self.find_closest_food(head, game_state.food)
         if not target:
-            logging.debug(
+            logging.info(
                 "Мандарины не найдены, продолжаем двигаться текущим направлением"
             )
             return (
                 my_snake.direction
             )  # Если мандаринов нет, продолжаем движение текущим направлением
 
-        logging.debug(
+        logging.info(
             f"Цель: мандарин на позиции ({target.c.x}, {target.c.y}, {target.c.z})"
         )
         direction = self.get_direction_vector(head, target.c)
-        logging.debug(f"Решённое направление: {direction}")
         return direction
 
     def find_closest_food(self, head: Point3D, food_list: List[Food]) -> Optional[Food]:
