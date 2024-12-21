@@ -15,7 +15,7 @@ def main():
 
     # Конфигурация
     TOKEN = "f05b5728-8e94-4f55-a903-e2ca923d285d"  # Замените на ваш токен
-    SERVER_URL = "https://games.datsteam.dev"  # Используйте основной сервер для финальных раундов
+    SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
     decision_maker = DecisionMaker()
