@@ -6,6 +6,7 @@ from game_state import GameState, Snake
 from decision_maker import DecisionMaker
 from visualization import Visualization
 from logger_config import setup_logger
+import threading
 
 
 def main():
@@ -14,8 +15,8 @@ def main():
     logging.info("Запуск бота для 3D Snake")
 
     # Конфигурация
-    TOKEN = "YOUR_TOKEN_HERE"  # Замените на ваш токен
-    SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
+    TOKEN = "f05b5728-8e94-4f55-a903-e2ca923d285d"  # Замените на ваш токен
+    SERVER_URL = "https://games.datsteam.dev"  # Используйте основной сервер для финальных раундов
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
     decision_maker = DecisionMaker()
@@ -29,6 +30,10 @@ def main():
     my_snake = initial_game_state.snakes[0]  # Если несколько, необходимо выбрать нужную
     logging.info(f"Управляется змеёй с ID: {my_snake.id}")
 
+    # Инициализация визуализации
+    visualization = Visualization(initial_game_state, my_snake)
+    visualization.start()
+
     while True:
         game_state = api_client.get_game_state()
         if not game_state:
@@ -39,15 +44,19 @@ def main():
         # Проверка статуса вашей змеи
         my_snake = next((s for s in game_state.snakes if s.id == my_snake.id), my_snake)
         if my_snake.status == "dead":
-            logging.info("Змея мертва, ожидаем возрождения.")
+            logging.warning("Змея мертва, ожидаем возрождения.")
             time.sleep(game_state.revive_timeout_sec)
             continue
 
         # Принятие решения о движении
         direction = decision_maker.decide_move(game_state, my_snake)
+        logging.debug(f"Принято направление: {direction}")
 
         # Отправка команды о движении
         api_client.send_move(my_snake.id, direction)
+
+        # Обновление визуализации
+        visualization.update_visualization(game_state, my_snake)
 
         # Логика ожидания конца тика
         tick_time = game_state.tick_remain_ms / 1000.0  # Перевод в секунды
@@ -60,11 +69,6 @@ def main():
             my_snake = next(
                 (s for s in updated_game_state.snakes if s.id == my_snake.id), my_snake
             )
-
-        # Визуализация (опционально)
-        # Uncomment the following lines to enable visualization
-        # visualization = Visualization(updated_game_state, my_snake)
-        # visualization.plot()
 
 
 if __name__ == "__main__":

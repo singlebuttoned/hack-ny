@@ -1,72 +1,100 @@
 # visualization.py
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 from game_state import GameState, Snake
+import logging
+import numpy as np
+from threading import Lock
 
 
 class Visualization:
-    def __init__(self, game_state: GameState, my_snake: Snake):
-        self.game_state = game_state
+    def __init__(self, initial_game_state: GameState, my_snake: Snake):
+        self.game_state = initial_game_state
         self.my_snake = my_snake
 
-    def plot(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
+        # Замок для безопасного обновления данных из разных потоков
+        self.lock = Lock()
 
-        # Настройки осей
-        max_x, max_y, max_z = self.game_state.map_size
-        ax.set_xlim(0, max_x)
-        ax.set_ylim(0, max_y)
-        ax.set_zlim(0, max_z)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        ax.set_title("Состояние игры 3D Snake")
+        # Создаем окно
+        self.app = pg.mkQApp("3D Snake Visualization")
+        self.window = gl.GLViewWidget()
+        self.window.opts["distance"] = 500
+        self.window.show()
+        self.window.setWindowTitle("3D Snake Game Visualization")
 
-        # Отрисовка заборов (fences)
-        for fence in self.game_state.fences:
-            ax.scatter(
-                fence.x, fence.y, fence.z, c="black", marker="s", s=20, label="Fence"
-            )
+        # Добавляем сетку (опционально)
+        grid = gl.GLGridItem()
+        grid.scale(10, 10, 10)
+        grid.setDepthValue(10)  # Размещаем сетку за всеми объектами
+        self.window.addItem(grid)
 
-        # Отрисовка мандаринов (food)
-        for food in self.game_state.food:
-            ax.scatter(
-                food.c.x, food.c.y, food.c.z, c="yellow", marker="o", s=50, label="Food"
-            )
+        # Создаем объекты для отрисовки
+        self.fences = gl.GLScatterPlotItem()
+        self.food = gl.GLScatterPlotItem()
+        self.enemies = gl.GLScatterPlotItem()
+        self.snake = gl.GLScatterPlotItem()
 
-        # Отрисовка змей соперников (enemies)
-        for enemy in self.game_state.enemies:
-            if enemy.status == "alive":
-                for segment in enemy.geometry:
-                    ax.scatter(
-                        segment.x,
-                        segment.y,
-                        segment.z,
-                        c="red",
-                        marker="^",
-                        s=30,
-                        label="Enemy",
-                    )
+        self.window.addItem(self.fences)
+        self.window.addItem(self.food)
+        self.window.addItem(self.enemies)
+        self.window.addItem(self.snake)
 
-        # Отрисовка вашей змеи (my_snake)
-        for idx, segment in enumerate(self.my_snake.geometry):
-            color = "orange"
-            marker = "o"
-            size = 100 if idx == 0 else 50  # Голова крупнее
-            ax.scatter(
-                segment.x,
-                segment.y,
-                segment.z,
-                c=color,
-                marker=marker,
-                s=size,
-                label="My Snake",
-            )
+        # Настраиваем начальные данные
+        self.update_visualization(initial_game_state, my_snake)
 
-        # Чтобы избежать дублирования меток в легенде
-        handles, labels = ax.get_legend_handles_labels()
-        unique = dict(zip(labels, handles))
-        ax.legend(unique.values(), unique.keys())
+    def update_visualization(self, game_state: GameState, my_snake: Snake):
+        with self.lock:
+            self.game_state = game_state
+            self.my_snake = my_snake
 
-        plt.show()
+            # Обновляем заборы
+            fences = game_state.fences
+            if fences:
+                fence_positions = np.array([[f.x, f.y, f.z] for f in fences])
+                self.fences.setData(pos=fence_positions, color=(0, 0, 0, 1), size=5)
+            else:
+                self.fences.setData(pos=[], color=[], size=[])
+
+            # Обновляем мандарины
+            foods = game_state.food
+            if foods:
+                food_positions = np.array(
+                    [[food.c.x, food.c.y, food.c.z] for food in foods]
+                )
+                self.food.setData(pos=food_positions, color=(1, 1, 0, 1), size=10)
+            else:
+                self.food.setData(pos=[], color=[], size=[])
+
+            # Обновляем врагов
+            enemies = game_state.enemies
+            enemy_segments = [
+                segment
+                for enemy in enemies
+                if enemy.status == "alive"
+                for segment in enemy.geometry
+            ]
+            if enemy_segments:
+                enemy_positions = np.array(
+                    [[segment.x, segment.y, segment.z] for segment in enemy_segments]
+                )
+                self.enemies.setData(pos=enemy_positions, color=(1, 0, 0, 1), size=8)
+            else:
+                self.enemies.setData(pos=[], color=[], size=[])
+
+            # Обновляем вашу змейку
+            snake_segments = my_snake.geometry
+            if snake_segments:
+                snake_positions = np.array(
+                    [[segment.x, segment.y, segment.z] for segment in snake_segments]
+                )
+                self.snake.setData(pos=snake_positions, color=(1, 0.5, 0, 1), size=10)
+            else:
+                self.snake.setData(pos=[], color=[], size=[])
+
+    def start(self):
+        # Запускаем приложение в отдельном потоке
+        import threading
+
+        thread = threading.Thread(target=self.app.exec_)
+        thread.daemon = True
+        thread.start()
