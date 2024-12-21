@@ -1,35 +1,24 @@
 # decision_maker.py
 import logging
-from typing import List, Optional
-from game_state import GameState, Snake, Food, Point3D
-from enum import Enum
+from typing import List, Optional, Tuple, Dict
+from game_state import GameState, Snake, Food, Point3D, Strategy
 
-
-class Strategy(Enum):
-    BASIC = 1
-    ADVANCED = 2
+import heapq
+import random
 
 
 class DecisionMaker:
-    def __init__(self, strategy: Strategy = Strategy.BASIC):
+    def __init__(self, strategy: Strategy, max_search_depth: int = 20):
+        """
+        :param strategy: Выбранная стратегия (BASIC или ADVANCED)
+        :param max_search_depth: Максимальное количество клеток для поиска путей
+        """
         self.strategy = strategy
+        self.max_search_depth = max_search_depth
         logging.info(f"Стратегия принятия решений: {self.strategy.name}")
-        self.blocked_directions = set()
-        self.block_time = 1  # Количество ходов, на которые блокируется направление
-        self.block_counters = {}
+        logging.info(f"Максимальная глубина поиска: {self.max_search_depth}")
 
     def decide_move(self, game_state: GameState, my_snake: Snake) -> List[int]:
-        # Уменьшаем счётчики блокировки
-        directions_to_unblock = []
-        for direction, counter in self.block_counters.items():
-            if counter <= 1:
-                directions_to_unblock.append(direction)
-            else:
-                self.block_counters[direction] -= 1
-        for direction in directions_to_unblock:
-            self.blocked_directions.remove(direction)
-            del self.block_counters[direction]
-
         # Выбор стратегии
         if self.strategy == Strategy.BASIC:
             return self.basic_strategy(game_state, my_snake)
@@ -64,104 +53,93 @@ class DecisionMaker:
     def advanced_strategy(self, game_state: GameState, my_snake: Snake) -> List[int]:
         logging.info("Используется ADVANCED стратегия.")
         head = my_snake.geometry[0]
-        logging.info(f"Позиция головы змеи: ({head.x}, {head.y}, {head.z})")
+        map_size = game_state.map_size
 
-        # Возможные направления движения
-        possible_directions = [
-            [1, 0, 0],  # +x
-            [-1, 0, 0],  # -x
-            [0, 1, 0],  # +y
-            [0, -1, 0],  # -y
-            [0, 0, 1],  # +z
-            [0, 0, -1],  # -z
-        ]
+        # Определяем ограничение области поиска
+        search_limit = self.max_search_depth
 
-        # Получить позиции препятствий и врагов
-        obstacle_positions = {tuple([f.x, f.y, f.z]) for f in game_state.fences}
-        enemy_positions = {
-            tuple([segment.x, segment.y, segment.z])
-            for enemy in game_state.enemies
-            if enemy.status == "alive"
-            for segment in enemy.geometry
-        }
+        # Определяем препятствия в пределах N клеток от головы
+        obstacles = set()
+        # Стены
+        for fence in game_state.fences:
+            if self.within_limit(head, fence, search_limit):
+                obstacles.add((fence.x, fence.y, fence.z))
+        # Враги
+        for enemy in game_state.enemies:
+            for point in enemy.geometry:
+                if self.within_limit(head, point, search_limit):
+                    obstacles.add((point.x, point.y, point.z))
+        # Собственная змейка (исключая хвост, если не растем)
+        for snake in game_state.snakes:
+            for point in snake.geometry:
+                if self.within_limit(head, point, search_limit):
+                    obstacles.add((point.x, point.y, point.z))
 
-        # Получить ближайшего врага для оценки безопасности
-        closest_enemy_distance = self.get_closest_distance(head, enemy_positions)
-
-        # Получить ближайший мандарин для оценки полезности направления
-        closest_food_distance = self.get_closest_distance_advanced(
-            head, game_state.food
+        logging.debug(
+            f"Общее количество препятствий в пределах {search_limit}: {len(obstacles)}"
         )
 
-        direction_scores = {}
+        # Найдем все доступные мандарины в пределах N клеток
+        available_food = [
+            food
+            for food in game_state.food
+            if self.within_limit(head, food.c, search_limit)
+        ]
 
-        for direction in possible_directions:
-            if tuple(direction) in self.blocked_directions:
-                continue  # Пропустить заблокированные направления
-
-            new_head = Point3D(
-                head.x + direction[0],
-                head.y + direction[1],
-                head.z + direction[2],
-            )
-
-            # Проверка коллизии
-            if (new_head.x, new_head.y, new_head.z) in obstacle_positions:
-                logging.info(
-                    f"Направление {direction} приводит к столкновению с препятствием."
-                )
-                continue
-            if (new_head.x, new_head.y, new_head.z) in enemy_positions:
-                logging.info(
-                    f"Направление {direction} приводит к столкновению с врагом."
-                )
-                continue
-
-            # Оценка безопасности
-            distance_to_closest_enemy = self.get_distance(
-                new_head, enemy_positions
-            )  # Более высокая безопасность при большей дистанции
-
-            # Оценка полезности
-            distance_to_closest_food = self.get_distance_advanced(
-                new_head, game_state.food
-            )  # Чем ближе, тем выше полезность
-
-            # Вычисление баллов (с увеличенным весом полезности)
-            score = (distance_to_closest_enemy * 1.0) + (
-                2.5 / (distance_to_closest_food + 1)
-            )
-
-            # Бонус за продолжение текущего направления
-            current_direction = my_snake.direction
-            if list(direction) == current_direction:
-                score += 1.0  # Бонус за продолжение текущего направления
-
-            direction_scores[tuple(direction)] = score
+        if not available_food:
             logging.info(
-                f"Направление {direction}: Безопасность={distance_to_closest_enemy}, Полезность={distance_to_closest_food}, Баллы={score}"
+                "Нет доступной еды в пределах ограничения. Двигаемся безопасно."
             )
+            return self.safe_move(obstacles, my_snake.direction, map_size, head)
 
-        if not direction_scores:
-            logging.warning(
-                "Нет безопасных направлений. Продолжаем двигаться текущим направлением."
+        # Используем A* для поиска пути к ближайшему мандарину
+        paths = []
+        for food in available_food:
+            path = self.a_star(
+                start=(head.x, head.y, head.z),
+                goal=(food.c.x, food.c.y, food.c.z),
+                obstacles=obstacles,
+                map_size=map_size,
+                max_depth=search_limit,
             )
-            return my_snake.direction
+            if path:
+                paths.append((len(path), path, food))
 
-        # Выбираем направление с максимальными баллами
-        best_direction = max(direction_scores, key=direction_scores.get)
-        logging.info(f"Выбранное направление (ADVANCED): {best_direction}")
-
-        # Блокируем противоположное направление на несколько ходов, чтобы избежать обратного движения
-        opposite_direction = self.get_opposite_direction(best_direction)
-        if opposite_direction:
-            self.blocked_directions.add(opposite_direction)
-            self.block_counters[opposite_direction] = self.block_time
+        if not paths:
             logging.info(
-                f"Направление {opposite_direction} заблокировано на {self.block_time} ходов."
+                "Нет доступных путей к еде в пределах ограничения. Двигаемся безопасно."
             )
+            return self.safe_move(obstacles, my_snake.direction, map_size, head)
 
-        return list(best_direction)
+        # Выбираем самый короткий путь
+        paths.sort(key=lambda x: x[0])
+        _, best_path, target_food = paths[0]
+        logging.info(
+            f"Лучший путь к мандарину на ({target_food.c.x}, {target_food.c.y}, {target_food.c.z}) длиной {len(best_path)}"
+        )
+
+        # Определяем направление первого шага
+        if len(best_path) < 2:
+            logging.warning("Путь слишком короткий, продолжаем текущим направлением.")
+            return my_snake.direction  # Нет шага вперед, продолжаем движение
+
+        next_step = best_path[1]
+        direction = [
+            next_step[0] - head.x,
+            next_step[1] - head.y,
+            next_step[2] - head.z,
+        ]
+
+        # Нормализуем направление
+        direction = [int(d / max(abs(d), 1)) for d in direction]
+
+        logging.info(f"Решённое направление: {direction}")
+        return direction
+
+    def within_limit(self, head: Point3D, point: Point3D, limit: int) -> bool:
+        """Проверяет, находится ли точка в пределах заданного ограничения от головы."""
+        distance = abs(point.x - head.x) + abs(point.y - head.y) + abs(point.z - head.z)
+        return distance <= limit
 
     def find_closest_food(self, head: Point3D, food_list: List[Food]) -> Optional[Food]:
         min_distance = float("inf")
@@ -177,56 +155,6 @@ class DecisionMaker:
                 min_distance = distance
                 closest_food = food
         return closest_food
-
-    def get_closest_distance(self, head: Point3D, positions: set) -> Optional[float]:
-        min_distance = float("inf")
-        for pos in positions:
-            distance = (
-                (pos[0] - head.x) ** 2 + (pos[1] - head.y) ** 2 + (pos[2] - head.z) ** 2
-            ) ** 0.5  # Евклидово расстояние
-            if distance < min_distance:
-                min_distance = distance
-        return min_distance if min_distance != float("inf") else None
-
-    def get_closest_distance_advanced(
-        self, head: Point3D, food_list: List[Food]
-    ) -> Optional[float]:
-        min_distance = float("inf")
-        for food in food_list:
-            distance = (
-                (food.c.x - head.x) ** 2
-                + (food.c.y - head.y) ** 2
-                + (food.c.z - head.z) ** 2
-            ) ** 0.5
-            if distance < min_distance:
-                min_distance = distance
-        return min_distance if min_distance != float("inf") else None
-
-    def get_distance(self, point: Point3D, positions: set) -> float:
-        """Возвращает минимальное Евклидово расстояние от точки до набора позиций."""
-        min_distance = float("inf")
-        for pos in positions:
-            distance = (
-                (pos[0] - point.x) ** 2
-                + (pos[1] - point.y) ** 2
-                + (pos[2] - point.z) ** 2
-            ) ** 0.5
-            if distance < min_distance:
-                min_distance = distance
-        return min_distance if min_distance != float("inf") else float("inf")
-
-    def get_distance_advanced(self, point: Point3D, food_list: List[Food]) -> float:
-        """Возвращает минимальное Евклидово расстояние от точки до набора мандаринов."""
-        min_distance = float("inf")
-        for food in food_list:
-            distance = (
-                (food.c.x - point.x) ** 2
-                + (food.c.y - point.y) ** 2
-                + (food.c.z - point.z) ** 2
-            ) ** 0.5
-            if distance < min_distance:
-                min_distance = distance
-        return min_distance if min_distance != float("inf") else float("inf")
 
     def get_direction_vector(self, head: Point3D, target: Point3D) -> List[int]:
         direction = [0, 0, 0]
@@ -244,8 +172,134 @@ class DecisionMaker:
             direction[2] = -1
         return direction
 
-    def get_opposite_direction(self, direction: tuple) -> Optional[tuple]:
-        """Возвращает противоположное направление."""
-        opposite = (-direction[0], -direction[1], -direction[2])
-        # Проверяем, не занято ли противоположное направление
-        return opposite if opposite not in self.blocked_directions else None
+    def a_star(
+        self,
+        start: Tuple[int, int, int],
+        goal: Tuple[int, int, int],
+        obstacles: set,
+        map_size: List[int],
+        max_depth: int,
+    ) -> Optional[List[Tuple[int, int, int]]]:
+        logging.debug(
+            f"A* поиск пути от {start} до {goal} с ограничением глубины {max_depth}"
+        )
+        open_set = []
+        heapq.heappush(open_set, (0, start))
+        came_from: Dict[Tuple[int, int, int], Optional[Tuple[int, int, int]]] = {
+            start: None
+        }
+        g_score = {start: 0}
+        f_score = {start: self.heuristic(start, goal)}
+
+        while open_set:
+            current_f, current = heapq.heappop(open_set)
+            current_depth = g_score[current]
+
+            if current == goal:
+                return self.reconstruct_path(came_from, current)
+
+            if current_depth >= max_depth:
+                logging.debug(
+                    f"Превышена максимальная глубина для узла {current}. Пропуск."
+                )
+                continue  # Пропускаем узлы, превышающие максимальную глубину
+
+            neighbors = self.get_neighbors(current, map_size)
+            for neighbor in neighbors:
+                if neighbor in obstacles:
+                    continue
+                tentative_g = g_score[current] + 1
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f = tentative_g + self.heuristic(neighbor, goal)
+                    if tentative_g <= max_depth:
+                        f_score[neighbor] = f
+                        heapq.heappush(open_set, (f, neighbor))
+
+        logging.debug("Путь не найден.")
+        return None  # Путь не найден
+
+    def heuristic(self, a: Tuple[int, int, int], b: Tuple[int, int, int]) -> int:
+        # Манхэттенское расстояние
+        return abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2])
+
+    def reconstruct_path(
+        self,
+        came_from: Dict[Tuple[int, int, int], Optional[Tuple[int, int, int]]],
+        current: Tuple[int, int, int],
+    ) -> List[Tuple[int, int, int]]:
+        path = [current]
+        while came_from[current]:
+            current = came_from[current]
+            path.append(current)
+        path.reverse()
+        logging.debug(f"Найденный путь: {path}")
+        return path
+
+    def get_neighbors(
+        self, node: Tuple[int, int, int], map_size: List[int]
+    ) -> List[Tuple[int, int, int]]:
+        x, y, z = node
+        neighbors = []
+        directions = [
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ]
+        for dx, dy, dz in directions:
+            nx, ny, nz = x + dx, y + dy, z + dz
+            if (
+                0 <= nx < map_size[0]
+                and 0 <= ny < map_size[1]
+                and 0 <= nz < map_size[2]
+            ):
+                neighbors.append((nx, ny, nz))
+        return neighbors
+
+    def safe_move(
+        self,
+        obstacles: set,
+        current_direction: List[int],
+        map_size: List[int],
+        head: Point3D,
+    ) -> List[int]:
+        # Проверяем возможные направления и выбираем первое безопасное
+        possible_directions = [
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+            [0, 0, 1],
+            [0, 0, -1],
+        ]
+        for direction in possible_directions:
+            new_x = head.x + direction[0]
+            new_y = head.y + direction[1]
+            new_z = head.z + direction[2]
+            if (
+                0 <= new_x < map_size[0]
+                and 0 <= new_y < map_size[1]
+                and 0 <= new_z < map_size[2]
+                and (new_x, new_y, new_z) not in obstacles
+            ):
+                logging.info(f"Безопасное направление найдено: {direction}")
+                return direction
+        logging.warning("Нет безопасных направлений, продолжаем текущим направлением.")
+        return current_direction  # Если нет безопасных направлений, сохраняем текущее
+
+    def random_move(self) -> List[int]:
+        directions = [
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+            [0, 0, 1],
+            [0, 0, -1],
+        ]
+        direction = random.choice(directions)
+        logging.info(f"Случайное направление: {direction}")
+        return direction
