@@ -16,7 +16,7 @@ class DecisionMaker:
     def __init__(
         self,
         strategy: Strategy,
-        max_search_depth: int = 20,
+        max_search_depth: int,
         target_change_interval: int = 5,
     ):
         """

@@ -66,7 +66,7 @@ def main():
     SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
-    decision_maker = DecisionMaker(strategy=Strategy.ADVANCED)
+    decision_maker = DecisionMaker(strategy=Strategy.ADVANCED, max_search_depth=40)
     visualization = Visualization()
 
     # Запускаем приложение визуализации в главном потоке
