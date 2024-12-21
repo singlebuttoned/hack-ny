@@ -1,24 +1,29 @@
 # visualization.py
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
+import numpy as np
 from game_state import GameState, Snake
 import logging
-import numpy as np
 from threading import Lock
+from PyQt5.QtCore import QObject, pyqtSignal
 
 
-class Visualization:
-    def __init__(self, initial_game_state: GameState, my_snake: Snake):
-        self.game_state = initial_game_state
-        self.my_snake = my_snake
+class Visualization(QObject):
+    update_signal = pyqtSignal(object, object)
 
-        # Замок для безопасного обновления данных из разных потоков
+    def __init__(self):
+        super().__init__()
+        self.game_state = None
+        self.my_snake = None
         self.lock = Lock()
 
-        # Создаем окно
+        # Создаём сигнал для обновления данных
+        self.update_signal.connect(self.update_visualization)
+
+        # Инициализируем приложение Qt
         self.app = pg.mkQApp("3D Snake Visualization")
         self.window = gl.GLViewWidget()
-        self.window.opts["distance"] = 500
+        self.window.opts["distance"] = 500  # Расстояние камеры
         self.window.show()
         self.window.setWindowTitle("3D Snake Game Visualization")
 
@@ -28,7 +33,7 @@ class Visualization:
         grid.setDepthValue(10)  # Размещаем сетку за всеми объектами
         self.window.addItem(grid)
 
-        # Создаем объекты для отрисовки
+        # Создаём объекты для отрисовки
         self.fences = gl.GLScatterPlotItem()
         self.food = gl.GLScatterPlotItem()
         self.enemies = gl.GLScatterPlotItem()
@@ -39,8 +44,13 @@ class Visualization:
         self.window.addItem(self.enemies)
         self.window.addItem(self.snake)
 
-        # Настраиваем начальные данные
-        self.update_visualization(initial_game_state, my_snake)
+    def start(self):
+        # Запускаем приложение Qt
+        pg.exec()
+
+    def request_update(self, game_state: GameState, my_snake: Snake):
+        # Посылаем сигнал для обновления данных в главном потоке
+        self.update_signal.emit(game_state, my_snake)
 
     def update_visualization(self, game_state: GameState, my_snake: Snake):
         with self.lock:
@@ -50,20 +60,26 @@ class Visualization:
             # Обновляем заборы
             fences = game_state.fences
             if fences:
-                fence_positions = np.array([[f.x, f.y, f.z] for f in fences])
+                fence_positions = np.array(
+                    [[f.x, f.y, f.z] for f in fences], dtype=np.float32
+                )
                 self.fences.setData(pos=fence_positions, color=(0, 0, 0, 1), size=5)
             else:
-                self.fences.setData(pos=[], color=[], size=[])
+                self.fences.setData(
+                    pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
+                )
 
             # Обновляем мандарины
             foods = game_state.food
             if foods:
                 food_positions = np.array(
-                    [[food.c.x, food.c.y, food.c.z] for food in foods]
+                    [[food.c.x, food.c.y, food.c.z] for food in foods], dtype=np.float32
                 )
                 self.food.setData(pos=food_positions, color=(1, 1, 0, 1), size=10)
             else:
-                self.food.setData(pos=[], color=[], size=[])
+                self.food.setData(
+                    pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
+                )
 
             # Обновляем врагов
             enemies = game_state.enemies
@@ -75,26 +91,24 @@ class Visualization:
             ]
             if enemy_segments:
                 enemy_positions = np.array(
-                    [[segment.x, segment.y, segment.z] for segment in enemy_segments]
+                    [[segment.x, segment.y, segment.z] for segment in enemy_segments],
+                    dtype=np.float32,
                 )
                 self.enemies.setData(pos=enemy_positions, color=(1, 0, 0, 1), size=8)
             else:
-                self.enemies.setData(pos=[], color=[], size=[])
+                self.enemies.setData(
+                    pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
+                )
 
             # Обновляем вашу змейку
             snake_segments = my_snake.geometry
             if snake_segments:
                 snake_positions = np.array(
-                    [[segment.x, segment.y, segment.z] for segment in snake_segments]
+                    [[segment.x, segment.y, segment.z] for segment in snake_segments],
+                    dtype=np.float32,
                 )
                 self.snake.setData(pos=snake_positions, color=(1, 0.5, 0, 1), size=10)
             else:
-                self.snake.setData(pos=[], color=[], size=[])
-
-    def start(self):
-        # Запускаем приложение в отдельном потоке
-        import threading
-
-        thread = threading.Thread(target=self.app.exec_)
-        thread.daemon = True
-        thread.start()
+                self.snake.setData(
+                    pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
+                )

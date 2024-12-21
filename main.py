@@ -9,16 +9,8 @@ from logger_config import setup_logger
 import threading
 
 
-def main():
-    # Настройка логирования
-    setup_logger()
-
-    # Конфигурация
-    TOKEN = "f05b5728-8e94-4f55-a903-e2ca923d285d"  # Замените на ваш токен
-    SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
-
-    api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
-    decision_maker = DecisionMaker()
+def bot_logic(api_client, decision_maker, visualization, snake_id):
+    my_snake = None
 
     # Получаем начальное состояние игры
     initial_game_state = api_client.get_game_state()
@@ -29,9 +21,8 @@ def main():
     my_snake = initial_game_state.snakes[0]  # Если несколько, необходимо выбрать нужную
     logging.info(f"Управляется змеёй с ID: {my_snake.id}")
 
-    # Инициализация визуализации
-    visualization = Visualization(initial_game_state, my_snake)
-    visualization.start()
+    # Отправляем начальное визуализационное обновление
+    visualization.request_update(initial_game_state, my_snake)
 
     while True:
         game_state = api_client.get_game_state()
@@ -55,19 +46,38 @@ def main():
         api_client.send_move(my_snake.id, direction)
 
         # Обновление визуализации
-        visualization.update_visualization(game_state, my_snake)
+        visualization.request_update(game_state, my_snake)
 
         # Логика ожидания конца тика
         tick_time = game_state.tick_remain_ms / 1000.0  # Перевод в секунды
         logging.debug(f"Ожидание конца тика: {tick_time} секунд")
         time.sleep(tick_time)
 
-        # Обновление состояния змеи после хода
-        updated_game_state = api_client.get_game_state()
-        if updated_game_state:
-            my_snake = next(
-                (s for s in updated_game_state.snakes if s.id == my_snake.id), my_snake
-            )
+
+def main():
+    # Настройка логирования
+    setup_logger()
+    logging.info("Запуск бота для 3D Snake")
+
+    # Конфигурация
+    TOKEN = "f05b5728-8e94-4f55-a903-e2ca923d285d"  # Замените на ваш токен
+    SERVER_URL = "https://games-test.datsteam.dev"  # Используйте основной сервер для финальных раундов
+
+    api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
+    decision_maker = DecisionMaker()
+    visualization = Visualization()
+
+    # Запускаем приложение визуализации в главном потоке
+    # А бот в отдельном потоке
+    bot_thread = threading.Thread(
+        target=bot_logic,
+        args=(api_client, decision_maker, visualization, None),
+        daemon=True,
+    )
+    bot_thread.start()
+
+    # Запускаем GUI
+    visualization.start()
 
 
 if __name__ == "__main__":
