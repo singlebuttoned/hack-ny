@@ -5,6 +5,7 @@ import argparse
 import time
 import logging
 from api_client import APIClient
+from controller import Controller
 from game_state import GameState, Snake, Strategy
 from decision_maker import DecisionMaker
 from visualization import Visualization
@@ -12,7 +13,7 @@ from logger_config import setup_logger
 import threading
 
 
-def bot_logic(api_client, decision_maker, visualization, snake: int):
+def bot_logic(api_client, decision_maker, visualization, snake: int, controller):
 
     # Получаем начальное состояние игры
     initial_game_state = api_client.get_game_state()
@@ -26,7 +27,8 @@ def bot_logic(api_client, decision_maker, visualization, snake: int):
     logging.info(f"Управляется змеёй с ID: {my_snake.id} под номером {snake}")
 
     # Отправляем начальное визуализационное обновление
-    visualization.request_update(initial_game_state, my_snake)
+    if not controller:
+        visualization.request_update(initial_game_state, my_snake)
 
     while True:
         game_state = api_client.get_game_state()
@@ -45,14 +47,18 @@ def bot_logic(api_client, decision_maker, visualization, snake: int):
             continue
 
         # Принятие решения о движении
-        direction = decision_maker.decide_move(game_state, my_snake, visualization)
+        if controller:
+            direction = controller.move(game_state, my_snake)
+        else:
+            direction = decision_maker.decide_move(game_state, my_snake, visualization)
         logging.info(f"Принято направление: {direction}")
 
         # Отправка команды о движении
         api_client.send_move(my_snake.id, direction)
 
         # Обновление визуализации
-        visualization.request_update(game_state, my_snake)
+        if not controller:
+            visualization.request_update(game_state, my_snake)
 
         # Логика ожидания конца тика
         tick_time = game_state.tick_remain_ms / 1000.0  # Перевод в секунды
@@ -72,7 +78,6 @@ def parse_arguments():
         default=Strategy.ADVANCED.name,
         help="The strategy to use for decision making, default is ADVANCED.",
     )
-
     parser.add_argument(
         "--snake",
         type=int,
@@ -80,12 +85,17 @@ def parse_arguments():
         default=0,
         help="The id of snake.",
     )
-
     parser.add_argument(
         "--depth",
         type=int,
         default=40,
         help="To search.",
+    )
+    parser.add_argument(
+        "--manual",
+        default=False,
+        action="store_true",
+        help="Manual control",
     )
 
     return parser.parse_args()
@@ -105,16 +115,18 @@ def main():
     selected_strategy: Strategy = Strategy[args.strategy]
     snake_id = args.snake
     depth = args.depth
+    manual_control = args.manual
 
     api_client = APIClient(token=TOKEN, server_url=SERVER_URL)
     decision_maker = DecisionMaker(strategy=selected_strategy, max_search_depth=depth)
     visualization = Visualization()
+    controller = Controller() if manual_control else None
 
     # Запускаем приложение визуализации в главном потоке
     # А бот в отдельном потоке
     bot_thread = threading.Thread(
         target=bot_logic,
-        args=(api_client, decision_maker, visualization, snake_id),
+        args=(api_client, decision_maker, visualization, snake_id, controller),
         daemon=True,
     )
     bot_thread.start()

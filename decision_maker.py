@@ -134,7 +134,12 @@ class DecisionMaker:
         )
 
         obstacles = set(
-            filter(lambda x: (True if x not in enemy_heads else False), obstacles)
+            filter(
+                lambda x: (
+                    True if Point3D(x[0], x[1], x[2]) not in enemy_heads else False
+                ),
+                obstacles,
+            )
         )
 
         if not enemy_heads:

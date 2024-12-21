@@ -2,7 +2,7 @@
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 import numpy as np
-from game_state import GameState, Snake
+from game_state import GameState, Snake, Point3D
 import logging
 from threading import Lock
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -118,7 +118,9 @@ class Visualization(QObject):
 
                 # Устанавливаем фокус камеры на голову змеи
                 snake_head = snake_positions[0]  # Первая точка — голова змеи
-                self.window.opts["center"] = pg.Vector(snake_head[0], snake_head[1], snake_head[2])
+                self.window.opts["center"] = pg.Vector(
+                    snake_head[0], snake_head[1], snake_head[2]
+                )
             else:
                 self.snake.setData(
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
@@ -128,7 +130,12 @@ class Visualization(QObject):
             target = self.target
             if target:
                 target_position = np.array(
-                    [[target.c.x, target.c.y, target.c.z]], dtype=np.float32
+                    (
+                        [[target.x, target.y, target.z]]
+                        if type(target) is Point3D
+                        else [[target.c.x, target.c.y, target.c.z]]
+                    ),
+                    dtype=np.float32,
                 )
                 self.target_marker.setData(
                     pos=target_position, color=(0, 0, 1, 1), size=22
