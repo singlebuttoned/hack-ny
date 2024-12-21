@@ -48,6 +48,8 @@ class DecisionMaker:
             return self.basic_strategy(game_state, my_snake, visualization)
         elif self.strategy == Strategy.ADVANCED:
             return self.advanced_strategy(game_state, my_snake, visualization)
+        elif self.strategy == Strategy.KILLER:  # Добавляем обработку KILLER
+            return self.killer_strategy(game_state, my_snake, visualization)
         else:
             logging.warning("Неизвестная стратегия. Используем BASIC.")
             return self.basic_strategy(game_state, my_snake, visualization)
@@ -107,6 +109,68 @@ class DecisionMaker:
 
         logging.warning("Нет безопасных направлений, продолжаем текущим направлением.")
         return my_snake.direction  # Если нет безопасных направлений, сохраняем текущее
+
+    def killer_strategy(
+        self, game_state: GameState, my_snake: Snake, visualization: Visualization
+    ) -> List[int]:
+        logging.info("Используется KILLER стратегия.")
+        head = my_snake.geometry[0]
+        map_size = game_state.map_size
+
+        # Собираем препятствия в радиусе N
+        obstacles = self.get_obstacles_within_radius(
+            game_state, my_snake, head, self.max_search_depth
+        )
+        logging.debug(
+            f"Общее количество препятствий в радиусе {self.max_search_depth}: {len(obstacles)}"
+        )
+
+        # Находим все головы врагов в радиусе N
+        enemy_heads = self.get_enemy_heads_within_radius(
+            game_state, head, self.max_search_depth
+        )
+        logging.info(
+            f"Количество голов врагов в радиусе {self.max_search_depth}: {len(enemy_heads)}"
+        )
+
+        obstacles = set(
+            filter(lambda x: (True if x not in enemy_heads else False), obstacles)
+        )
+
+        if not enemy_heads:
+            logging.info("Нет голов врагов в радиусе. Выбираем безопасное направление.")
+            safe_directions = self.get_safe_directions(game_state, my_snake)
+            if safe_directions:
+                chosen_direction = random.choice(safe_directions)
+                logging.info(f"Выбрано безопасное направление: {chosen_direction}")
+                return chosen_direction
+            else:
+                return self.random_move()
+
+        # Выбираем ближайшую голову врага
+        closest_enemy_head, path = self.find_closest_enemy_head(
+            head, enemy_heads, obstacles, map_size
+        )
+
+        if closest_enemy_head and path:
+            self.current_target = closest_enemy_head
+            visualization.target = closest_enemy_head
+            self.steps_since_target_change = 0
+            logging.info(
+                f"Выбрана цель (голова врага) на позиции: ({closest_enemy_head.x}, {closest_enemy_head.y}, {closest_enemy_head.z})"
+            )
+            return self.get_direction_from_path(head, path)
+        else:
+            logging.info(
+                "Нет доступных путей к головам врагов. Выбираем безопасное направление."
+            )
+            safe_directions = self.get_safe_directions(game_state, my_snake)
+            if safe_directions:
+                chosen_direction = random.choice(safe_directions)
+                logging.info(f"Выбрано безопасное направление: {chosen_direction}")
+                return chosen_direction
+            else:
+                return self.random_move()
 
     def advanced_strategy(
         self, game_state: GameState, my_snake: Snake, visualization: Visualization
@@ -259,6 +323,69 @@ class DecisionMaker:
                 )
         return available_food
 
+    def get_enemy_heads_within_radius(
+        self, game_state: GameState, head: Point3D, radius: int
+    ) -> List[Point3D]:
+        """
+        Находит головы всех врагов в пределах заданного радиуса.
+        :param game_state: Текущее состояние игры
+        :param head: Позиция головы змеи
+        :param radius: Радиус поиска
+        :return: Список позиций голов врагов
+        """
+        enemy_heads = []
+        for enemy in game_state.enemies:
+            if not enemy.geometry:
+                continue  # Если у врага нет координат, пропускаем
+            enemy_head = enemy.geometry[
+                0
+            ]  # Предполагаем, что первая точка - это голова
+            distance = self.manhattan_distance(head, enemy_head)
+            if distance <= radius:
+                enemy_heads.append(enemy_head)
+                logging.debug(
+                    f"Голова врага на ({enemy_head.x}, {enemy_head.y}, {enemy_head.z}) в радиусе: {distance}"
+                )
+        return enemy_heads
+
+    def find_closest_enemy_head(
+        self,
+        head: Point3D,
+        enemy_heads: List[Point3D],
+        obstacles: set,
+        map_size: List[int],
+    ) -> Tuple[Optional[Point3D], Optional[List[Tuple[int, int, int]]]]:
+        """
+        Находит ближайшую голову врагов, до которой есть доступный путь.
+        :param head: Позиция головы змеи
+        :param enemy_heads: Список позиций голов врагов
+        :param obstacles: Множество препятствий
+        :param map_size: Размер карты
+        :return: Кортеж из позиции головы и пути до нее или (None, None) если не найдено
+        """
+        sorted_heads = sorted(
+            enemy_heads,
+            key=lambda enemy_head: self.manhattan_distance(head, enemy_head),
+        )
+        for enemy_head in sorted_heads:
+            path = self.a_star(
+                start=(head.x, head.y, head.z),
+                goal=(enemy_head.x, enemy_head.y, enemy_head.z),
+                obstacles=obstacles,
+                map_size=map_size,
+                max_depth=self.max_search_depth,
+            )
+            if path:
+                logging.info(
+                    f"Найден путь к голове врага на ({enemy_head.x}, {enemy_head.y}, {enemy_head.z}) длиной {len(path)}"
+                )
+                return enemy_head, path
+            else:
+                logging.debug(
+                    f"Нет доступного пути к голове врага на ({enemy_head.x}, {enemy_head.y}, {enemy_head.z})"
+                )
+        return None, None
+
     def select_new_target(
         self,
         head: Point3D,
@@ -369,6 +496,37 @@ class DecisionMaker:
                     )
 
         return obstacles
+
+    def safe_move(
+        self,
+        obstacles: set,
+        current_direction: List[int],
+        map_size: List[int],
+        head: Point3D,
+    ) -> List[int]:
+        # Проверяем возможные направления и выбираем первое безопасное
+        possible_directions = [
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+            [0, 0, 1],
+            [0, 0, -1],
+        ]
+        for direction in possible_directions:
+            new_x = head.x + direction[0]
+            new_y = head.y + direction[1]
+            new_z = head.z + direction[2]
+            if (
+                0 <= new_x < map_size[0]
+                and 0 <= new_y < map_size[1]
+                and 0 <= new_z < map_size[2]
+                and (new_x, new_y, new_z) not in obstacles
+            ):
+                logging.info(f"Безопасное направление найдено: {direction}")
+                return direction
+        logging.warning("Нет безопасных направлений, продолжаем текущим направлением.")
+        return current_direction  # Если нет безопасных направлений, сохраняем текущее
 
     def get_safe_directions(
         self, game_state: GameState, my_snake: Snake
@@ -579,69 +737,6 @@ class DecisionMaker:
         elif head.z > target.z:
             direction[2] = -1
         return direction
-
-    def get_safe_directions(
-        self, game_state: GameState, my_snake: Snake
-    ) -> List[List[int]]:
-        """
-        Возвращает список безопасных направлений, в которые змея может двигаться.
-        :param game_state: Текущее состояние игры
-        :param my_snake: Ваша змейка
-        :return: Список безопасных направлений [dx, dy, dz]
-        """
-        safe_directions = []
-        head = my_snake.geometry[0]
-        map_size = game_state.map_size
-
-        # Собираем множество препятствий: стены, враги, все змеи (включая собственную)
-        obstacles = set()
-        for fence in game_state.fences:
-            obstacles.add((fence.x, fence.y, fence.z))
-        for enemy in game_state.enemies:
-            for point in enemy.geometry:
-                obstacles.add((point.x, point.y, point.z))
-        for snake in game_state.snakes:
-            for point in snake.geometry:
-                obstacles.add((point.x, point.y, point.z))
-
-        logging.debug(f"Общее количество препятствий: {len(obstacles)}")
-
-        # Определяем возможные направления движения
-        possible_directions = [
-            [1, 0, 0],
-            [-1, 0, 0],
-            [0, 1, 0],
-            [0, -1, 0],
-            [0, 0, 1],
-            [0, 0, -1],
-        ]
-
-        for direction in possible_directions:
-            new_x = head.x + direction[0]
-            new_y = head.y + direction[1]
-            new_z = head.z + direction[2]
-
-            # Проверяем, находится ли новая позиция внутри карты
-            if not (
-                0 <= new_x < map_size[0]
-                and 0 <= new_y < map_size[1]
-                and 0 <= new_z < map_size[2]
-            ):
-                logging.debug(f"Направление {direction} выходит за пределы карты.")
-                continue
-
-            # Проверяем, не является ли новая позиция препятствием
-            if (new_x, new_y, new_z) in obstacles:
-                logging.debug(
-                    f"Направление {direction} ведет к препятствию на ({new_x}, {new_y}, {new_z})."
-                )
-                continue
-
-            # Направление безопасно
-            safe_directions.append(direction)
-
-        logging.debug(f"Безопасные направления: {safe_directions}")
-        return safe_directions
 
     def get_alternative_directions(
         self, head: Point3D, target: Point3D, safe_directions: List[List[int]]

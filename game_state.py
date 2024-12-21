@@ -22,7 +22,6 @@ class Snake:
     revive_remain_ms: int
 
 
-
 @dataclass
 class Enemy:
     geometry: List[Point3D]
@@ -54,3 +53,4 @@ class GameState:
 class Strategy(Enum):
     BASIC = 1
     ADVANCED = 2
+    KILLER = 3
