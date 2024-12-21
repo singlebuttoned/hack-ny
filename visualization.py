@@ -107,7 +107,7 @@ class Visualization(QObject):
                     [[segment.x, segment.y, segment.z] for segment in snake_segments],
                     dtype=np.float32,
                 )
-                self.snake.setData(pos=snake_positions, color=(1, 0.5, 0, 1), size=10)
+                self.snake.setData(pos=snake_positions, color=(0, 1, 0, 1), size=10)
             else:
                 self.snake.setData(
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
