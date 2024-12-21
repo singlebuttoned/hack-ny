@@ -63,7 +63,7 @@ class Visualization(QObject):
                 fence_positions = np.array(
                     [[f.x, f.y, f.z] for f in fences], dtype=np.float32
                 )
-                self.fences.setData(pos=fence_positions, color=(0, 0, 0, 1), size=5)
+                self.fences.setData(pos=fence_positions, color=(0.5, 0, 0.5, 1), size=5)
             else:
                 self.fences.setData(
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
