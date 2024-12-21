@@ -115,6 +115,10 @@ class Visualization(QObject):
                     dtype=np.float32,
                 )
                 self.snake.setData(pos=snake_positions, color=(0, 1, 0, 1), size=10)
+
+                # Устанавливаем фокус камеры на голову змеи
+                snake_head = snake_positions[0]  # Первая точка — голова змеи
+                self.window.opts["center"] = pg.Vector(snake_head[0], snake_head[1], snake_head[2])
             else:
                 self.snake.setData(
                     pos=np.empty((0, 3)), color=np.empty((0, 4)), size=np.empty((0,))
